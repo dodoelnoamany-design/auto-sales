@@ -1,0 +1,7 @@
+// Minimal build.gradle snippet to set applicationId
+// This file may be merged or adapted into the real Android project build.gradle
+android {
+    defaultConfig {
+        applicationId "com.autosales.app"
+    }
+}

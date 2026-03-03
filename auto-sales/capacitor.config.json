@@ -1,0 +1,6 @@
+{
+  "appId": "com.autosales.app",
+  "appName": "Auto Sales",
+  "webDir": "dist",
+  "bundledWebRuntime": false
+}
