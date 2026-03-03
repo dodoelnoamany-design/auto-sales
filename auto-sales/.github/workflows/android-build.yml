@@ -52,17 +52,27 @@ jobs:
           echo "Restoring keystore..."
           mkdir -p android/app
           echo "${{ secrets.ANDROID_KEYSTORE }}" | base64 --decode > android/app/release-keystore.jks
-          chmod 600 android/app/release-keystore.jks
+          # Also write to signingKey.jks in case the Android project expects that filename
+          cp android/app/release-keystore.jks android/app/signingKey.jks
+          chmod 600 android/app/release-keystore.jks android/app/signingKey.jks
 
       - name: Create keystore properties (optional)
         if: secrets.ANDROID_KEYSTORE != ''
         run: |
           cat > android/keystore.properties <<EOF
-          storeFile=app/release-keystore.jks
+          # Keystore properties used by Gradle signing config
+          storeFile=app/signingKey.jks
           storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
           keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
           EOF
+        shell: bash
+
+      - name: Validate keystore
+        if: secrets.ANDROID_KEYSTORE != ''
+        run: |
+          echo "Listing keystore contents (non-sensitive):"
+          keytool -list -v -keystore android/app/signingKey.jks -storepass "${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" -alias "${{ secrets.ANDROID_KEY_ALIAS }}"
         shell: bash
 
       - name: Build Android (Gradle)
