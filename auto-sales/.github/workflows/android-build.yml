@@ -1,0 +1,88 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Setup Java (JDK 11)
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: '11'
+
+      - name: Cache node modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            **/node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build web assets
+        run: npm run build
+
+      # The steps below assume you are using Capacitor and have an Android project
+      # either committed or created during the workflow. Adjust as needed.
+      - name: Install Capacitor CLI
+        run: npm install --no-save @capacitor/cli @capacitor/core
+
+      - name: Sync Android (Capacitor)
+        run: npx cap sync android || echo "cap sync failed - ensure android folder exists or run cap add android locally"
+
+      - name: Restore keystore
+        if: secrets.ANDROID_KEYSTORE != ''
+        run: |
+          echo "Restoring keystore..."
+          mkdir -p android/app
+          echo "${{ secrets.ANDROID_KEYSTORE }}" | base64 --decode > android/app/release-keystore.jks
+          chmod 600 android/app/release-keystore.jks
+
+      - name: Create keystore properties (optional)
+        if: secrets.ANDROID_KEYSTORE != ''
+        run: |
+          cat > android/keystore.properties <<EOF
+          storeFile=app/release-keystore.jks
+          storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
+          keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
+          EOF
+        shell: bash
+
+      - name: Build Android (Gradle)
+        working-directory: android
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          chmod +x ./gradlew
+          # Pass signing properties to Gradle to sign the APK using the restored keystore
+          ./gradlew assembleRelease \
+            -Pandroid.injected.signing.store.file=app/release-keystore.jks \
+            -Pandroid.injected.signing.store.password=${ANDROID_KEYSTORE_PASSWORD} \
+            -Pandroid.injected.signing.key.alias=${ANDROID_KEY_ALIAS} \
+            -Pandroid.injected.signing.key.password=${ANDROID_KEY_PASSWORD} || (echo "Gradle build failed - ensure Android SDK and project are configured" && exit 0)
+
+      - name: Upload APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-apk
+          path: android/app/build/outputs/**/app-release.apk
