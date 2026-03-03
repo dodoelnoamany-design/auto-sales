@@ -1,0 +1,5 @@
+{
+  "name": "Auto Sales",
+  "description": "A web-based automated calling list manager with Excel/CSV import and call sequence simulation.",
+  "requestFramePermissions": ["storage"]
+}
